@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.4.0](https://github.com/TomazAlexandre/gearness/compare/v0.3.0...v0.4.0) (2026-11-17)
+
+
+### Features
+
+* **rules:** add context/entry-substance to tell thin entry files from substantive ones ([8746f61](https://github.com/TomazAlexandre/gearness/commit/8746f6147d4e8189b40db533543a5a96f69dedb3))
+
+
+### Bug Fixes
+
+* report the real package version ([16860ec](https://github.com/TomazAlexandre/gearness/commit/16860ec47caecf2eb487bc6bdb4a1589403876fd))
+
+## [0.3.0](https://github.com/TomazAlexandre/gearness/compare/v0.2.0...v0.3.0) (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* **score:** projects whose entry file is missing now score at most 39, which can fail gates.minScore and doctor --ci.
+
+### Features
+
+* **score:** cap the score at 39 when the entry file is missing ([669a66e](https://github.com/TomazAlexandre/gearness/commit/669a66eb632bf6f97536519fa0574e4f19ca14b9))
+* **study:** reproducible study kit to measure harness effectiveness ([ea497ee](https://github.com/TomazAlexandre/gearness/commit/ea497ee55bc93f63c7b71d53f3426230c722aebe))
+
 ## [0.2.0](https://github.com/TomazAlexandre/gearness/compare/v0.1.1...v0.2.0) (2026-11-13)
 
 
