@@ -79,8 +79,13 @@ export const SECRET_PATTERNS: [string, RegExp][] = [
 ];
 
 /** Signals that an entry file carries real project knowledge, not just a title and a command. Deterministic: no model involved. */
-const COMMAND_START = /^(npm|pnpm|yarn|npx|bun|deno|make|just|task|cargo|go|pytest|python3?|pip|uv|poetry|mvn|gradle|\.\/gradlew|dotnet|bundle|rake|composer|php|docker|git)\s/;
+const COMMAND_START = /^(npm|pnpm|yarn|npx|bun|deno|make|just|task|cargo|go|pytest|python3?|pip|uv|poetry|tox|nox|ruff|mvn|gradle|\.\/gradlew|\.\/mvnw|dotnet|bundle|rake|rspec|composer|php|docker|git|swift|flutter|dart|mix|sbt|nx|turbo|bazel|cmake|ctest|eslint|prettier|tsc|vitest|jest)\s|^\.\/[\w./-]+\.(sh|ps1|bat|cmd)\b/;
+/** `PYTHONPATH=src python -m unittest` is still a command: leading VAR=value assignments do not count. */
+const withoutEnv = (c: string) => c.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, "");
 const RULE_WORDS = /\b(never|always|must|must not|do not|don't|avoid|prefer|forbidden|required|only)\b/i;
+
+/** Signs of real project knowledge (out of 5) an entry file needs before context/placeholders gives it full credit. */
+export const MIN_SUBSTANCE = 3;
 
 export interface SubstanceSignal {
   id: string;
@@ -98,7 +103,7 @@ export function substanceSignals(text: string, exists: (rel: string) => boolean)
   const headings = lines.filter((l, i) => /^\s*#{2,6}\s+\S/.test(l) && !inFence[i]).length;
   const codeSpans = [...text.matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim());
   const fenced = lines.filter((l, i) => inFence[i] && !/^\s*(```|~~~)/.test(l)).map((l) => l.trim().replace(/^[$>]\s*/, ""));
-  const hasCommand = [...codeSpans, ...fenced].some((c) => COMMAND_START.test(c));
+  const hasCommand = [...codeSpans, ...fenced].some((c) => COMMAND_START.test(withoutEnv(c)));
   const paths = [...codeSpans, ...[...text.matchAll(/\]\(([^)#\s]+)[^)]*\)/g)].map((m) => m[1])].filter((c) => /[\/.]/.test(c) && !/^(https?:|mailto:)/.test(c) && !/\s/.test(c));
   const realPaths = paths.filter((c) => exists(c.replace(/^\.\//, "").replace(/\/$/, "")));
   return [
@@ -280,8 +285,8 @@ export const RULES: Rule[] = [
     pillar: "context",
     weight: 30,
     severity: "warn",
-    description: `Scaffolded ${PLACEHOLDER} markers are replaced with real project knowledge. Structure without content is not a harness.`,
-    check: ({ config, read }) => {
+    description: `Scaffolded ${PLACEHOLDER} markers are replaced with real project knowledge, and the entry file shows at least ${MIN_SUBSTANCE} of the 5 signs of it (see context/entry-substance). Structure without content is not a harness, and neither is a file with nothing left to fill in.`,
+    check: ({ config, read, exists }) => {
       const out: Finding[] = [];
       for (const file of contextFiles(config)) {
         const text = read(file);
@@ -290,12 +295,23 @@ export const RULES: Rule[] = [
         if (hits.length)
           out.push({ message: `${hits.length} unfilled ${PLACEHOLDER} marker(s)`, file, line: lineOf(text, hits[0]), hint: "replace with concrete facts about this codebase - this is where most of the value is" });
       }
+      const entry = read(config.context.entry);
+      if (entry !== null && !placeholderHits(entry).length) {
+        const ok = substanceSignals(entry, exists).filter((x) => x.ok).length;
+        if (ok < MIN_SUBSTANCE)
+          out.push({ message: `no ${PLACEHOLDER} markers left, but the entry file shows only ${ok} of 5 signs of real project knowledge: removing the markers is not the same as filling them in`, file: config.context.entry, hint: "see context/entry-substance for the signs that are missing" });
+      }
       return out;
     },
-    // Each remaining marker costs a share of the points; ~6 left means no credit.
-    credit: ({ config, read }) => {
+    // Each remaining marker costs a share of the points; ~6 left means no credit. An entry file with fewer than
+    // MIN_SUBSTANCE signs of real content earns only that fraction of the points, so an empty file cannot score as filled in.
+    credit: ({ config, read, exists }) => {
       const total = contextFiles(config).reduce((n, f) => n + placeholderHits(read(f) ?? "").length, 0);
-      return Math.max(0, 1 - total / 6);
+      const base = Math.max(0, 1 - total / 6);
+      const entry = read(config.context.entry);
+      if (entry === null) return base; // a missing entry file is the score cap's job
+      const ok = substanceSignals(entry, exists).filter((x) => x.ok).length;
+      return Math.min(base, Math.min(1, ok / MIN_SUBSTANCE));
     },
   },
   {
